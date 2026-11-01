@@ -79,5 +79,15 @@ Hebrew parsing rules for prompt.md: number before or after noun; number words (�
 4. stores, prices, nightly job, comparison screen. Accept: 20-item list totals at 3 branches in under 3 s.
 5. Copy list, open online store, Claude in Chrome recipe.
 
+## Deviations in phase 1
+What was built differs from the sections above in these ways. The code is the source of truth for each.
+- List status: the enum also has `bought`. A tapped row stays on the server, hidden in the app, so it can be undone until `finish_trip()` moves it to trip_items.
+- list_items: extra column `last_op_id`, so a replayed offline operation does not double the qty.
+- Access: RLS reads the household code from the `x-household-code` header. Anon has read access only. All app writes go through security definer functions.
+- Realtime: the database broadcasts a data-free ping on `household:<uuid>` and clients refetch through RLS, because row-level change events would be hidden without the header.
+- "סיימתי": WhatsApp opens only when there is at least one unavailable item and a configured number. With no unavailable items the trip is saved and the list cleared without opening WhatsApp.
+- Catalog seed: store 413 (שופרסל ONLINE). PriceFull has no department field, so categories are guessed from keywords in the item name.
+- App size: `app/` holds 5 files (the icon is the fifth), one over the "under 5 files" convention in CLAUDE.md.
+
 ## Risks
 Test number reclaimed → prepaid SIM, one config change. Gemini free tier changes → swap model behind prompt.md, or trigram-only fallback. Supabase pause → keep-alive; app shows "המסד ישן, לחץ להעיר". Push lost after reinstall → re-ask on open; Thursday prompt also as in-app banner.
