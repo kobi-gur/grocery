@@ -33,7 +33,7 @@ docs/                 SPEC.md, SETUP.md, PROMPTS.md
 - `supabase db push` applies migrations to the linked project (use `/db-migrate`)
 - `supabase functions deploy wa-webhook` deploys the webhook (use `/deploy`)
 - `supabase functions serve wa-webhook --env-file .env` runs it locally
-- `npx serve app` previews the PWA locally
+- Preview the PWA locally from a copy with the config filled in, since `app/app.js` holds placeholders that the Pages workflow fills from GitHub secrets: `set -a; . ./.env; set +a; rm -rf .preview && cp -R app .preview && SB_URL="${SUPABASE_URL%%/rest/*}" perl -pi -e 's#__SUPABASE_URL__#$ENV{SB_URL}#; s#__SUPABASE_ANON_KEY__#$ENV{SUPABASE_ANON_KEY}#; s#__BUILD__#preview#' .preview/app.js .preview/sw.js && npx serve .preview -l 4173`
 - `/wa-test "חלב, 2 ק\"ג עגבניות"` sends a fake inbound message to the local webhook
 
 ## Conventions

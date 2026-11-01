@@ -23,8 +23,8 @@ WIFEY_PHONE_E164=
 
 ## 1. GitHub (5 min)
 1. Create a new private repo named `grocery`. Push this starter kit to it.
-2. Settings > Pages > Source: Deploy from a branch, branch `main`, folder `/app`. Note the URL (`https://<you>.github.io/grocery/`). This is the app link the family installs.
-3. Settings > Secrets and variables > Actions: add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` after step 2 below (the keep-alive job needs them).
+2. Settings > Pages > Source: GitHub Actions. Note the URL (`https://<you>.github.io/grocery/`). This is the app link the family installs.
+3. Settings > Secrets and variables > Actions: add `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` after step 2 below (the Pages deploy and the keep-alive job need them).
 
 ## 2. Supabase (10 min)
 1. supabase.com, sign in with GitHub, New project, name `grocery`, region Frankfurt (closest to Israel), free plan. Save the database password somewhere safe; you rarely need it.

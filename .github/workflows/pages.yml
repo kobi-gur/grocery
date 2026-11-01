@@ -1,0 +1,45 @@
+name: Deploy app to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The anon key is public by design (RLS protects the data) but stays out of the repo.
+      - name: Fill in config and build stamp
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "::error::SUPABASE_URL secret is missing"; exit 1; }
+          test -n "$SUPABASE_ANON_KEY" || { echo "::error::SUPABASE_ANON_KEY secret is missing"; exit 1; }
+          export SB_URL="$(printf '%s' "$SUPABASE_URL" | sed -E 's#^(https://[^/]+).*#\1#')"
+          perl -pi -e 's#__SUPABASE_URL__#$ENV{SB_URL}#; s#__SUPABASE_ANON_KEY__#$ENV{SUPABASE_ANON_KEY}#' app/app.js
+          perl -pi -e 's#__BUILD__#$ENV{GITHUB_SHA}#' app/sw.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

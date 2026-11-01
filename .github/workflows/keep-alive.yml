@@ -1,0 +1,31 @@
+name: Keep Supabase awake
+
+# Supabase free pauses after 7 idle days.
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select from households
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          base="$(printf '%s' "$SUPABASE_URL" | sed -E 's#^(https://[^/]+).*#\1#')"
+          curl --fail-with-body --silent --show-error --output /dev/null \
+            "$base/rest/v1/households?select=id&limit=1" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
+
+      # GitHub disables scheduled workflows after 60 days without repo activity, which would let the database pause.
+      - name: Keep this schedule enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/$GITHUB_REPOSITORY/actions/workflows/keep-alive.yml/enable"
