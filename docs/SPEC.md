@@ -73,8 +73,8 @@ Rules: unique (household_id, catalog_item_id, status) on list_items; `finish_tri
 Hebrew parsing rules for prompt.md: number before or after noun; number words (שני, שתי, שלושה); "חצי קילו" = 0.5 kg; "ק"ג" and "קילו" = kg; name-only line = qty not given.
 
 ## Phases and acceptance
-1. Schema, seed, PWA, finish_trip, keep-alive. Accept: two phones see a tap within 2 s; airplane-mode taps sync; "סיימתי" opens WhatsApp with the right text.
-2. wa-webhook, prompt.md, Meta webhook registered. Accept: 15-item mixed message parsed with correct units; אשר adds all; a correction changes only the named items.
+1. Schema, seed, PWA, finish_trip, keep-alive. The app deploys to GitHub Pages via an Actions workflow that publishes the app/ folder. Accept: two phones see a tap within 2 s; airplane-mode taps sync; "סיימתי" opens WhatsApp with the right text.
+2. wa-webhook, prompt.md, Meta webhook registered, push-thursday edge function (web push, VAPID). Accept: 15-item mixed message parsed with correct units; אשר adds all; a correction changes only the named items.
 3. Photo OCR (optional).
 4. stores, prices, nightly job, comparison screen. Accept: 20-item list totals at 3 branches in under 3 s.
 5. Copy list, open online store, Claude in Chrome recipe.
