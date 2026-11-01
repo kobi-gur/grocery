@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>רשימת קניות</title>
+<meta name="theme-color" content="#1f7a4d" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14201a" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="קניות">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6f3;
+    --surface: #ffffff;
+    --text: #1b241f;
+    --muted: #5f6b64;
+    --line: #e2e5df;
+    --accent: #1f7a4d;
+    --accent-text: #ffffff;
+    --accent-soft: #e4f2ea;
+    --star: #c98a00;
+    --warn-bg: #fff4d6;
+    --warn-text: #6b4e00;
+    --grey-row: #ecedea;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111713;
+      --surface: #1b231e;
+      --text: #eef2ef;
+      --muted: #a3afa8;
+      --line: #2d3731;
+      --accent: #3fae78;
+      --accent-text: #08130d;
+      --accent-soft: #1d3327;
+      --star: #eab308;
+      --warn-bg: #3a2f10;
+      --warn-text: #f5deA0;
+      --grey-row: #171c19;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    min-height: 100dvh;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; }
+  h1, h2, p { margin: 0; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 4px;
+    min-height: 56px;
+    padding: env(safe-area-inset-top) 16px 0;
+    background: var(--bg);
+  }
+  header h1 { flex: 1; font-size: 24px; font-weight: 700; }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px; flex: none; border-radius: 12px; font-size: 22px; color: var(--muted);
+  }
+  .icon-btn:active { background: var(--line); }
+
+  .notice { margin: 0 16px 8px; padding: 10px 14px; border-radius: 12px; background: var(--warn-bg); color: var(--warn-text); font-size: 15px; width: calc(100% - 32px); text-align: start; }
+  .banner { margin: 0 16px 12px; padding: 14px; border-radius: 14px; background: var(--accent-soft); }
+  .banner p { font-weight: 600; margin-bottom: 10px; }
+  .banner .row-actions { display: flex; gap: 8px; }
+
+  .primary, .secondary {
+    min-height: 48px; padding: 0 18px; border-radius: 12px; font-weight: 600;
+  }
+  .primary { background: var(--accent); color: var(--accent-text); }
+  .primary:disabled { opacity: 0.45; }
+  .secondary { background: var(--surface); border: 1px solid var(--line); }
+  .primary:active, .secondary:active { filter: brightness(0.93); }
+
+  #add { position: relative; margin: 0 16px 12px; padding: 8px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); }
+  #add input[type="search"] { width: 100%; min-height: 48px; padding: 0 12px; border: 0; background: none; outline: 0; font-size: 18px; -webkit-appearance: none; appearance: none; }
+  #add-details { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 12px; }
+  .stepper button { width: 44px; height: 46px; font-size: 22px; color: var(--accent); }
+  .stepper input { width: 52px; height: 46px; border: 0; background: none; text-align: center; font-size: 17px; outline: 0; }
+  #add-unit { min-height: 48px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 17px; flex: 1; min-width: 92px; }
+  #add-submit { flex: 1; min-width: 88px; }
+  #suggestions { list-style: none; margin: 4px 0 0; padding: 0; max-height: 45dvh; overflow-y: auto; }
+  #suggestions button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 48px; padding: 8px 12px; border-radius: 10px; text-align: start; }
+  #suggestions button:active { background: var(--accent-soft); }
+  #suggestions .new { color: var(--accent); font-weight: 600; }
+  #suggestions small { color: var(--muted); font-size: 13px; flex: none; }
+
+  .strip { margin: 0 0 12px; }
+  .strip h2, .group h2 { padding: 0 16px; font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 16px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; max-width: 70vw; min-height: 48px; padding: 0 14px; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip:active { background: var(--accent-soft); }
+  .chip.missing { border-color: var(--star); }
+
+  .group { margin-bottom: 14px; }
+  .rows { list-style: none; margin: 0 16px; padding: 0; background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+  .row { display: flex; align-items: stretch; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row-main {
+    flex: 1; min-width: 0; min-height: 56px; padding: 8px 14px; text-align: start;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: pan-y;
+  }
+  .row-main:active { background: var(--accent-soft); }
+  .row-main .name { display: block; overflow-wrap: anywhere; }
+  .row-main .note { display: block; font-size: 13px; color: var(--muted); }
+  .row.unavailable { background: var(--grey-row); }
+  .row.unavailable .name { color: var(--muted); }
+  .star.on { color: var(--star); }
+  .row .icon-btn { height: auto; min-height: 48px; border-radius: 0; }
+
+  .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
+  .count { padding: 0 16px 12px; color: var(--muted); font-size: 14px; }
+
+  #finish-bar {
+    position: fixed; inset: auto 0 0 0; z-index: 6;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+  }
+  #finish-bar .primary { width: 100%; min-height: 56px; font-size: 19px; }
+
+  #toast {
+    position: fixed; inset: auto 16px calc(84px + env(safe-area-inset-bottom)) 16px; z-index: 8;
+    display: flex; align-items: center; gap: 8px;
+    min-height: 52px; padding: 4px 8px 4px 4px; padding-inline-start: 16px;
+    background: #24302a; color: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  }
+  #toast span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  #toast button { flex: none; min-height: 48px; padding: 0 14px; color: #8fe0b5; font-weight: 700; }
+
+  #modal { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-end; background: rgb(0 0 0 / 0.45); }
+  #modal .sheet { width: 100%; max-height: 80dvh; overflow-y: auto; padding: 20px 16px calc(16px + env(safe-area-inset-bottom)); background: var(--surface); border-radius: 18px 18px 0 0; }
+  #modal h2 { font-size: 21px; margin-bottom: 8px; }
+  #modal p { margin-bottom: 8px; color: var(--muted); }
+  #modal ul { margin: 0 0 12px; padding-inline-start: 20px; }
+  #modal .actions { display: flex; gap: 8px; margin-top: 12px; }
+  #modal .actions button { flex: 1; }
+
+  #setup { display: flex; flex-direction: column; gap: 12px; max-width: 420px; margin: 0 auto; padding: calc(56px + env(safe-area-inset-top)) 24px 24px; }
+  #setup h1 { font-size: 28px; }
+  #setup p { color: var(--muted); }
+  #setup input { min-height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 18px; }
+  #setup-error { color: #c2362b; min-height: 22px; }
+
+  .select-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px; text-align: start; }
+  .select-row input { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+  .select-row small { display: block; color: var(--muted); font-size: 13px; }
+  .select-row.done { opacity: 0.55; }
+  .pad { padding: 0 16px 12px; color: var(--muted); }
+  .sticky-action { position: fixed; inset: auto 0 0 0; z-index: 6; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 70%, transparent); }
+  .sticky-action .primary { width: 100%; min-height: 56px; font-size: 19px; }
+  .inline-link { display: block; margin: 0 16px 14px; width: calc(100% - 32px); }
+</style>
+</head>
+<body>
+  <form id="setup" hidden>
+    <h1>רשימת קניות</h1>
+    <p>מה קוד המשפחה? מקלידים פעם אחת וזהו.</p>
+    <input id="setup-code" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="קוד המשפחה" placeholder="קוד המשפחה">
+    <button class="primary" type="submit">כניסה</button>
+    <p id="setup-error" role="alert"></p>
+  </form>
+
+  <div id="app" hidden>
+    <header>
+      <button id="back" class="icon-btn" aria-label="חזרה לרשימה" hidden>&#8594;</button>
+      <h1 id="title">רשימת קניות</h1>
+      <button id="open-favorites" class="icon-btn star on" aria-label="מועדפים">&#9733;</button>
+    </header>
+
+    <button id="status" class="notice" hidden></button>
+
+    <main id="screen-list">
+      <div id="thursday-banner" class="banner" hidden>
+        <p>להוסיף את המועדפים לרשימה?</p>
+        <div class="row-actions">
+          <button id="thursday-yes" class="primary">כן, בואו נבחר</button>
+          <button id="thursday-no" class="secondary">לא עכשיו</button>
+        </div>
+      </div>
+
+      <form id="add" autocomplete="off">
+        <input id="add-name" type="search" enterkeyhint="done" autocomplete="off" autocorrect="off" aria-label="מה חסר?" placeholder="מה חסר?">
+        <ul id="suggestions" hidden></ul>
+        <div id="add-details" hidden>
+          <div class="stepper">
+            <button type="button" id="qty-plus" aria-label="עוד אחד">+</button>
+            <input id="add-qty" type="text" inputmode="decimal" value="1" aria-label="כמות">
+            <button type="button" id="qty-minus" aria-label="אחד פחות">&minus;</button>
+          </div>
+          <select id="add-unit" aria-label="יחידה"></select>
+          <button id="add-submit" class="primary" type="submit">הוסף</button>
+        </div>
+      </form>
+
+      <div id="list-content"></div>
+    </main>
+
+    <main id="screen-favorites" hidden></main>
+    <main id="screen-thursday" hidden></main>
+
+    <div id="finish-bar"><button id="finish" class="primary">סיימתי</button></div>
+    <div id="thursday-action" class="sticky-action" hidden><button id="thursday-confirm" class="primary"></button></div>
+  </div>
+
+  <div id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-undo" hidden>בטל</button></div>
+  <div id="modal" hidden><div class="sheet" id="modal-sheet" role="dialog" aria-modal="true"></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -5,3 +5,4 @@ node_modules/
 .supabase/
 supabase/.temp/
 CLAUDE.local.md
+.preview/
