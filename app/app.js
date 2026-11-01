@@ -12,13 +12,17 @@ const UNITS = {
   bag: { one: 'שקית', many: 'שקיות' },
   bottle: { one: 'בקבוק', many: 'בקבוקים' },
 };
-const CATALOG_COLUMNS = 'id,name_he,category_id,is_favorite,default_unit,default_qty,times_bought';
+const CATALOG_COLUMNS = 'id,name_he,barcode,category_id,is_favorite,default_unit,default_qty,times_bought';
 const STORE = { code: 'grocery.code', server: 'grocery.server', queue: 'grocery.queue', dismissed: 'grocery.thursdayDismissed' };
 const LONG_PRESS_MS = 550;
 const UNDO_MS = 5000;
 const RETRY_MS = 5000;
 const REQUEST_TIMEOUT_MS = 10000;
 const SAFETY_REFRESH_MS = 30000;
+const CHAIN_THUMB_BASE = 'https://res.cloudinary.com/shufersal/image/upload/f_auto,q_auto/v1551800922/prod/product_images/products_medium';
+const OFF_PRODUCT_BASE = 'https://world.openfoodfacts.org/api/v2/product';
+const OFF_MIN_BARCODE_LENGTH = 8;
+const PLACEHOLDER_THUMB = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M10 18l14-7 14 7v14l-14 7-14-7zM10 18l14 7 14-7M24 25v14" fill="none" stroke="#8a948e" stroke-width="2" stroke-linejoin="round"/></svg>')}`;
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -518,6 +522,85 @@ function confirmFinish() {
   }
 }
 
+// Product thumbnails: chain image by barcode, then Open Food Facts, then the placeholder.
+// Shufersal's file code is the barcode's last three spreadsheet-column letters (A to Z, then AA...) plus its digit sum.
+function chainThumbUrl(barcode) {
+  let n = Number(barcode);
+  let letters = '';
+  for (let i = 0; i < 3; i += 1) {
+    n -= 1;
+    letters = String.fromCharCode(65 + (n % 26)) + letters;
+    n = Math.floor(n / 26);
+  }
+  const digitSum = [...barcode].reduce((sum, digit) => sum + Number(digit), 0);
+  return `${CHAIN_THUMB_BASE}/${letters}${digitSum}_M_P_${barcode}_1.png`;
+}
+
+const chainThumbMisses = new Set();
+const offThumbUrls = new Map();
+
+// The Open Food Facts file name has a language and a revision, so it takes a lookup. Remembered for the session.
+function offThumbUrl(barcode) {
+  if (!offThumbUrls.has(barcode)) {
+    offThumbUrls.set(barcode, fetch(`${OFF_PRODUCT_BASE}/${barcode}.json?fields=image_front_small_url,image_small_url`, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.product?.image_front_small_url ?? data?.product?.image_small_url ?? null)
+      .catch(() => {
+        offThumbUrls.delete(barcode);
+        return null;
+      }));
+  }
+  return offThumbUrls.get(barcode);
+}
+
+function showThumb(img, url, onMiss) {
+  img.onerror = () => {
+    img.onerror = null;
+    img.src = PLACEHOLDER_THUMB;
+    onMiss?.();
+  };
+  img.src = url;
+}
+
+function loadThumb(img) {
+  const barcode = img.dataset.barcode;
+  if (!/^\d+$/.test(barcode ?? '')) return;
+  const tryOff = async () => {
+    if (barcode.length < OFF_MIN_BARCODE_LENGTH) return;
+    const url = await offThumbUrl(barcode);
+    if (url && img.dataset.barcode === barcode) showThumb(img, url);
+  };
+  if (chainThumbMisses.has(barcode)) {
+    tryOff();
+    return;
+  }
+  showThumb(img, chainThumbUrl(barcode), () => {
+    chainThumbMisses.add(barcode);
+    tryOff();
+  });
+}
+
+const thumbObserver = new IntersectionObserver((entries, observer) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    observer.unobserve(entry.target);
+    loadThumb(entry.target);
+  }
+}, { rootMargin: '100px' });
+
+function thumbHtml(item) {
+  return `<img class="thumb" src="${PLACEHOLDER_THUMB}" alt="" loading="lazy" decoding="async" crossorigin="anonymous" data-barcode="${esc(item.barcode ?? '')}">`;
+}
+
+function showDetailThumb(item) {
+  const img = $('add-thumb');
+  img.onerror = null;
+  img.hidden = !item;
+  img.dataset.barcode = item?.barcode ?? '';
+  img.src = PLACEHOLDER_THUMB;
+  if (item) loadThumb(img);
+}
+
 // Add form
 function parseQty() {
   const n = Number($('add-qty').value.replace(',', '.'));
@@ -537,6 +620,7 @@ function resetAdd() {
   $('add-qty').value = '1';
   $('add-unit').value = 'unit';
   $('add-details').hidden = true;
+  showDetailThumb(null);
   closeSuggestions();
 }
 
@@ -551,11 +635,13 @@ function pickItem(item) {
   $('add-qty').value = Number(item.default_qty) || 1;
   $('add-unit').value = item.default_unit;
   $('add-details').hidden = false;
+  showDetailThumb(item);
   closeSuggestions();
 }
 
 function onNameInput() {
   selected = null;
+  showDetailThumb(null);
   const q = $('add-name').value.trim();
   $('add-details').hidden = q === '';
   clearTimeout(searchTimer);
@@ -585,9 +671,11 @@ function renderSuggestions(q, items) {
   const exact = items.some((i) => i.name_he === q);
   let html = '';
   if (!exact) html += `<li><button type="button" class="new" data-new="1">להוסיף: ${esc(q)}</button></li>`;
-  html += items.map((item, index) => `<li><button type="button" data-suggest="${index}"><span>${esc(item.name_he)}</span>${item.times_bought > 0 ? '<small>קנינו בעבר</small>' : ''}</button></li>`).join('');
+  html += items.map((item, index) => `<li><button type="button" data-suggest="${index}">${thumbHtml(item)}<span class="suggest-name">${esc(item.name_he)}</span>${item.times_bought > 0 ? '<small>קנינו בעבר</small>' : ''}</button></li>`).join('');
   $('suggestions').innerHTML = html;
   $('suggestions').hidden = false;
+  thumbObserver.disconnect();
+  for (const img of $('suggestions').querySelectorAll('.thumb')) thumbObserver.observe(img);
 }
 
 function submitAdd(event) {

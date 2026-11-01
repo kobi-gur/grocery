@@ -34,7 +34,7 @@ Setup: open link in Safari, add to home screen, enter household code, save bot c
 
 A. WhatsApp: send text or photo. Bot replies one confirmation (items, qty, unit; "1 ?" when missing; "חדש" when unmatched) with buttons אשר / ערוך. Text reply = correction, new confirmation. Confirm adds all; duplicates merge qty. Records who added.
 
-B. App: type, autocomplete (household history by frequency, then chain catalog), set qty/unit, add. Unknown items create catalog entries. "בדרך כלל קונים" strip of frequent items not on the list.
+B. App: type, autocomplete (household history by frequency, then chain catalog), set qty/unit, add. Unknown items create catalog entries. "בדרך כלל קונים" strip of frequent items not on the list. Autocomplete results and the item detail show a product thumbnail when one is available. Source order: chain image by barcode, then Open Food Facts by barcode, then a neutral placeholder. Images are never stored in the database or the repo; only a URL pattern is used. The in-store list stays text-only.
 
 C. In store: grouped by category in store-walk order. Tap = bought, gone, undo toast. Long-press = unavailable. Realtime between phones, offline queue. "סיימתי": wa.me message to wifey with unavailable items, trip saved, list cleared. Next list shows "חסר בפעם הקודמת" strip.
 

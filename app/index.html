@@ -99,6 +99,9 @@
   #suggestions button:active { background: var(--accent-soft); }
   #suggestions .new { color: var(--accent); font-weight: 600; }
   #suggestions small { color: var(--muted); font-size: 13px; flex: none; }
+  #suggestions .suggest-name { flex: 1; min-width: 0; }
+  .thumb { flex: none; width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: #fff; }
+  #add-thumb { width: 64px; height: 64px; }
 
   .strip { margin: 0 0 12px; }
   .strip h2, .group h2 { padding: 0 16px; font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
@@ -198,6 +201,7 @@
         <input id="add-name" type="search" enterkeyhint="done" autocomplete="off" autocorrect="off" aria-label="מה חסר?" placeholder="מה חסר?">
         <ul id="suggestions" hidden></ul>
         <div id="add-details" hidden>
+          <img id="add-thumb" class="thumb" alt="" decoding="async" crossorigin="anonymous" hidden>
           <div class="stepper">
             <button type="button" id="qty-plus" aria-label="עוד אחד">+</button>
             <input id="add-qty" type="text" inputmode="decimal" value="1" aria-label="כמות">
