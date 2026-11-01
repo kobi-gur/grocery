@@ -91,3 +91,6 @@ What was built differs from the sections above in these ways. The code is the so
 
 ## Risks
 Test number reclaimed → prepaid SIM, one config change. Gemini free tier changes → swap model behind prompt.md, or trigram-only fallback. Supabase pause → keep-alive; app shows "המסד ישן, לחץ להעיר". Push lost after reinstall → re-ask on open; Thursday prompt also as in-app banner. Shufersal image URL formula is reverse-engineered and may stop working → app falls back to Open Food Facts, then placeholder. No other impact.
+
+## Later
+- Swipe affordance: show visually that a list row can be swiped (e.g. a faint edge handle or a one-time hint on first open).
