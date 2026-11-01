@@ -15,6 +15,13 @@ const UNITS = {
 const CATALOG_COLUMNS = 'id,name_he,barcode,category_id,is_favorite,default_unit,default_qty,times_bought';
 const STORE = { code: 'grocery.code', server: 'grocery.server', queue: 'grocery.queue', dismissed: 'grocery.thursdayDismissed' };
 const LONG_PRESS_MS = 550;
+const TAP_SLOP_PX = 10; // moved further than this, the touch is no longer a tap or a long press
+const SWIPE_LOCK_PX = 16; // a row starts following the finger only past this, and only sideways
+const SWIPE_OPEN_PX = 64; // released past this, the row opens (or an open row closes)
+const SWIPE_REVEAL_PX = 236; // same as --reveal in index.html
+const RENDER_SETTLE_MS = 100;
+const QTY_STEPS = { g: 100, ml: 100 };
+const OTHER_CATEGORY = 'אחר';
 const UNDO_MS = 5000;
 const RETRY_MS = 5000;
 const REQUEST_TIMEOUT_MS = 10000;
@@ -22,6 +29,10 @@ const SAFETY_REFRESH_MS = 30000;
 const CHAIN_THUMB_BASE = 'https://res.cloudinary.com/shufersal/image/upload/f_auto,q_auto/v1551800922/prod/product_images/products_medium';
 const OFF_PRODUCT_BASE = 'https://world.openfoodfacts.org/api/v2/product';
 const OFF_MIN_BARCODE_LENGTH = 8;
+const PHOTO_SWAPS = [
+  [/\/products_medium\/(.*)_M_P_/, '/products_zoom/$1_Z_P_'],
+  [/\.\d+\.jpg$/, '.400.jpg'],
+];
 const PLACEHOLDER_THUMB = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M10 18l14-7 14 7v14l-14 7-14-7zM10 18l14 7 14-7M24 25v14" fill="none" stroke="#8a948e" stroke-width="2" stroke-linejoin="round"/></svg>')}`;
 
 const $ = (id) => document.getElementById(id);
@@ -55,6 +66,10 @@ let searchSeq = 0;
 let searchTimer = null;
 let toastTimer = null;
 let undoAction = null;
+let openRowId = null; // list row with its swipe controls showing
+let openSide = 'right';
+let listBusy = false; // a finger is on a row, so the list must not be replaced under it
+let listDirty = false;
 
 function formatQty(qty, unit) {
   const n = Number(qty);
@@ -94,6 +109,22 @@ function applyOp(state, op) {
     case 'remove':
       state.rows = state.rows.filter((r) => r.id !== op.id);
       break;
+    case 'qty': {
+      const row = state.rows.find((r) => r.id === op.id);
+      if (row) {
+        row.qty = op.qty;
+        row.unit = op.unit;
+      }
+      break;
+    }
+    case 'category': {
+      const items = [...state.rows.map((r) => r.catalog_items), ...state.favorites, ...state.frequent, ...state.missing.map((m) => m.item)];
+      const rowItem = state.rows.find((r) => r.id === op.id)?.catalog_items;
+      for (const item of items) {
+        if (item === rowItem || item.id === op.itemId) item.category_id = op.categoryId;
+      }
+      break;
+    }
     case 'star': {
       for (const r of state.rows) {
         if (r.catalog_items.id === op.item.id) r.catalog_items.is_favorite = op.value;
@@ -130,6 +161,10 @@ function runOp(op) {
       return db.rpc('set_list_item_status', { p_id: op.id, p_status: op.status });
     case 'remove':
       return db.rpc('remove_list_item', { p_id: op.id });
+    case 'qty':
+      return db.rpc('set_list_item_qty', { p_id: op.id, p_qty: op.qty, p_unit: op.unit });
+    case 'category':
+      return db.rpc('set_item_category', { p_list_item_id: op.id, p_catalog_item_id: op.itemId, p_category_id: op.categoryId });
     case 'star':
       return db.rpc('set_favorite', { p_catalog_item_id: op.item.id, p_value: op.value });
     case 'finish':
@@ -315,10 +350,16 @@ function onListIds(state) {
 }
 
 function renderList(state) {
+  if (listBusy) {
+    listDirty = true;
+    return;
+  }
+  listDirty = false;
   $('thursday-banner').hidden = !thursdayDue(state.household);
   const active = state.rows.filter((r) => r.status === 'on_list' || r.status === 'unavailable');
   const boughtCount = state.rows.length - active.length;
   const taken = onListIds(state);
+  if (!active.some((r) => r.id === openRowId)) openRowId = null;
   let html = '';
 
   const missing = state.missing.filter((m) => !taken.has(m.item.id));
@@ -346,9 +387,10 @@ function renderList(state) {
 
 function groupRows(rows, categories) {
   const known = new Map(categories.map((c) => [c.id, c]));
+  const other = categories.find((c) => c.name_he === OTHER_CATEGORY);
   const groups = new Map();
   for (const row of rows) {
-    const category = known.get(row.catalog_items.category_id);
+    const category = known.get(row.catalog_items.category_id) ?? other;
     const key = category?.id ?? 'none';
     if (!groups.has(key)) groups.set(key, { name: category?.name_he ?? 'אחר', order: category?.sort_order ?? Number.MAX_SAFE_INTEGER, rows: [] });
     groups.get(key).rows.push(row);
@@ -363,13 +405,22 @@ function groupRows(rows, categories) {
 function rowHtml(row) {
   const item = row.catalog_items;
   const unavailable = row.status === 'unavailable';
-  return `<li class="row ${unavailable ? 'unavailable' : ''}">
-    <button class="row-main" data-row="${esc(row.id)}">
-      <span class="name">${esc(item.name_he)}, ${esc(formatQty(row.qty, row.unit))}</span>
-      ${unavailable ? '<span class="note">לא היה במלאי</span>' : ''}
-    </button>
-    <button class="icon-btn star ${item.is_favorite ? 'on' : ''}" data-star="${esc(item.id)}" aria-label="${item.is_favorite ? 'להוריד ממועדפים' : 'להוסיף למועדפים'}" aria-pressed="${item.is_favorite}">${item.is_favorite ? '&#9733;' : '&#9734;'}</button>
-    <button class="icon-btn" data-remove="${esc(row.id)}" aria-label="למחוק מהרשימה">&times;</button>
+  const open = row.id === openRowId;
+  return `<li class="row swipe ${unavailable ? 'unavailable' : ''} ${open ? 'open' : ''}" data-id="${esc(row.id)}" data-side="${open ? openSide : 'right'}">
+    <div class="row-controls">
+      <button data-step="1" aria-label="עוד אחד">+</button>
+      <span class="row-qty">${esc(formatQty(row.qty, row.unit))}</span>
+      <button data-step="-1" aria-label="אחד פחות" ${Number(row.qty) <= qtyStep(row.unit) ? 'disabled' : ''}>&minus;</button>
+      <button class="row-edit" data-edit="1">ערוך</button>
+    </div>
+    <div class="row-slide">
+      <button class="row-main" data-row="${esc(row.id)}">
+        <span class="name">${esc(item.name_he)}, ${esc(formatQty(row.qty, row.unit))}</span>
+        ${unavailable ? '<span class="note">לא היה במלאי</span>' : ''}
+      </button>
+      <button class="icon-btn star ${item.is_favorite ? 'on' : ''}" data-star="${esc(item.id)}" aria-label="${item.is_favorite ? 'להוריד ממועדפים' : 'להוסיף למועדפים'}" aria-pressed="${item.is_favorite}">${item.is_favorite ? '&#9733;' : '&#9734;'}</button>
+      <button class="icon-btn" data-remove="${esc(row.id)}" aria-label="למחוק מהרשימה">&times;</button>
+    </div>
   </li>`;
 }
 
@@ -465,6 +516,21 @@ function removeRow(id) {
   showToast(`נמחק: ${row.catalog_items.name_he}`, () => addToList(row.catalog_items, Number(row.qty), row.unit));
 }
 
+const qtyStep = (unit) => QTY_STEPS[unit] ?? 1;
+
+function stepRow(id, direction) {
+  const row = view().rows.find((r) => r.id === id);
+  if (!row) return;
+  const next = Math.round((Number(row.qty) + direction * qtyStep(row.unit)) * 1000) / 1000;
+  if (next > 0) enqueue({ type: 'qty', id, qty: next, unit: row.unit });
+}
+
+function closeOpenRow() {
+  if (!openRowId) return;
+  document.querySelector(`.row.swipe[data-id="${CSS.escape(openRowId)}"]`)?.classList.remove('open');
+  openRowId = null;
+}
+
 function toggleStar(itemId) {
   const state = view();
   const item = state.rows.map((r) => r.catalog_items).find((c) => c.id === itemId)
@@ -505,6 +571,52 @@ function askFinish() {
   $('modal').hidden = false;
   $('finish-confirm').addEventListener('click', confirmFinish);
   $('finish-cancel').addEventListener('click', () => { $('modal').hidden = true; });
+}
+
+// Item panel. Quantity and unit belong to this list row, the category to the catalog item.
+function openItemPanel(id) {
+  const state = view();
+  const row = state.rows.find((r) => r.id === id);
+  if (!row) return;
+  closeOpenRow();
+  const item = row.catalog_items;
+  const current = state.categories.some((c) => c.id === item.category_id)
+    ? item.category_id
+    : state.categories.find((c) => c.name_he === OTHER_CATEGORY)?.id ?? '';
+  $('modal-sheet').innerHTML = `<h2>${esc(item.name_he)}</h2>
+    <img id="panel-thumb" class="thumb" src="${PLACEHOLDER_THUMB}" alt="" decoding="async" crossorigin="anonymous" data-barcode="${esc(item.barcode ?? '')}">
+    <div class="panel-qty">
+      <div class="stepper">
+        <button type="button" id="panel-plus" aria-label="עוד אחד">+</button>
+        <input id="panel-qty" type="text" inputmode="decimal" value="${esc(Number(row.qty))}" aria-label="כמות">
+        <button type="button" id="panel-minus" aria-label="אחד פחות">&minus;</button>
+      </div>
+      <select id="panel-unit" aria-label="יחידה">${unitOptions()}</select>
+    </div>
+    <label class="panel-field">קטגוריה
+      <select id="panel-category">${state.categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name_he)}</option>`).join('')}</select>
+    </label>
+    <div class="actions"><button class="primary" id="panel-save">שמור</button><button class="secondary" id="panel-cancel">ביטול</button></div>`;
+  $('panel-unit').value = row.unit;
+  $('panel-category').value = current;
+  $('modal').hidden = false;
+  loadThumb($('panel-thumb'));
+  $('panel-thumb').addEventListener('click', () => openPhoto($('panel-thumb')));
+  const step = (direction) => {
+    const next = Math.round((parseQty($('panel-qty'), Number(row.qty)) + direction * qtyStep($('panel-unit').value)) * 1000) / 1000;
+    if (next > 0) $('panel-qty').value = next;
+  };
+  $('panel-plus').addEventListener('click', () => step(1));
+  $('panel-minus').addEventListener('click', () => step(-1));
+  $('panel-cancel').addEventListener('click', () => { $('modal').hidden = true; });
+  $('panel-save').addEventListener('click', () => {
+    const qty = parseQty($('panel-qty'), Number(row.qty));
+    const unit = $('panel-unit').value;
+    const categoryId = $('panel-category').value;
+    $('modal').hidden = true;
+    if (qty !== Number(row.qty) || unit !== row.unit) enqueue({ type: 'qty', id, qty, unit });
+    if (categoryId && categoryId !== current) enqueue({ type: 'category', id, itemId: item.id, categoryId });
+  });
 }
 
 function confirmFinish() {
@@ -551,6 +663,25 @@ function offThumbUrl(barcode) {
       }));
   }
   return offThumbUrls.get(barcode);
+}
+
+// Opens at once with the picture already on screen, then swaps to the bigger one if it exists.
+function openPhoto(thumb) {
+  if (thumb.src.startsWith('data:')) return false;
+  const src = thumb.src;
+  const photo = $('photo-img');
+  photo.src = src;
+  $('photo').hidden = false;
+  const [pattern, swap] = PHOTO_SWAPS.find(([p]) => p.test(src)) ?? [];
+  if (pattern) {
+    const large = new Image();
+    large.crossOrigin = 'anonymous';
+    large.onload = () => {
+      if (!$('photo').hidden && photo.src === src) photo.src = large.src;
+    };
+    large.src = src.replace(pattern, swap);
+  }
+  return true;
 }
 
 function showThumb(img, url, onMiss) {
@@ -602,9 +733,9 @@ function showDetailThumb(item) {
 }
 
 // Add form
-function parseQty() {
-  const n = Number($('add-qty').value.replace(',', '.'));
-  return Number.isFinite(n) && n > 0 ? n : 1;
+function parseQty(input = $('add-qty'), fallback = 1) {
+  const n = Number(input.value.replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 function stepQty(delta) {
@@ -703,6 +834,8 @@ function bindEvents() {
   $('qty-plus').addEventListener('click', () => stepQty(1));
   $('qty-minus').addEventListener('click', () => stepQty(-1));
   $('suggestions').addEventListener('click', (e) => {
+    const thumb = e.target.closest('.thumb');
+    if (thumb && openPhoto(thumb)) return;
     const button = e.target.closest('button');
     if (!button) return;
     if (button.dataset.new) {
@@ -712,6 +845,16 @@ function bindEvents() {
     } else {
       pickItem(suggestionItems[Number(button.dataset.suggest)]);
     }
+  });
+
+  $('add-thumb').addEventListener('click', () => openPhoto($('add-thumb')));
+  $('photo').addEventListener('click', () => { $('photo').hidden = true; });
+  $('modal').addEventListener('click', (e) => {
+    if (e.target === $('modal')) $('modal').hidden = true;
+  });
+  // composedPath, because a click on the list may already have re-rendered its target away.
+  document.addEventListener('click', (e) => {
+    if (!e.composedPath().includes($('list-content'))) closeOpenRow();
   });
 
   bindRowGestures($('list-content'));
@@ -773,43 +916,115 @@ function wake() {
   refresh();
 }
 
-// Tap = bought, long press = unavailable. Handled together so a long press does not also count as a tap.
+// Tap = bought, long press = unavailable, sideways = controls. Handled together so a touch is only ever one of them.
 function bindRowGestures(container) {
   let timer = null;
-  let startX = 0;
-  let startY = 0;
+  let pressed = null; // { id, pointerId, x, y }
+  let drag = null; // { row, base, offset }
+  let moved = false;
   let longPressed = false;
 
-  const cancel = () => {
+  const cancelLongPress = () => {
     clearTimeout(timer);
     timer = null;
   };
-  container.addEventListener('pointerdown', (e) => {
-    const row = e.target.closest('[data-row]');
-    longPressed = false;
+  const releaseList = () => {
+    listBusy = false;
+    // Not at once: the click for this touch is still on its way and needs its element.
+    if (listDirty) setTimeout(() => { if (listDirty) render(); }, RENDER_SETTLE_MS);
+  };
+  const startDrag = (e) => {
+    const row = container.querySelector(`.row.swipe[data-id="${CSS.escape(pressed.id)}"]`);
     if (!row) return;
-    startX = e.clientX;
-    startY = e.clientY;
-    const id = row.dataset.row;
+    if (openRowId !== pressed.id) closeOpenRow();
+    const base = openRowId ? (openSide === 'right' ? SWIPE_REVEAL_PX : -SWIPE_REVEAL_PX) : 0;
+    row.classList.add('dragging');
+    row.classList.remove('open');
+    row.setPointerCapture?.(e.pointerId);
+    drag = { row, base, offset: base };
+  };
+  const moveDrag = (dx) => {
+    let offset = Math.max(-SWIPE_REVEAL_PX, Math.min(SWIPE_REVEAL_PX, drag.base + dx));
+    // An open row can only travel back to closed, not through to the other side.
+    if (drag.base > 0) offset = Math.max(0, offset);
+    if (drag.base < 0) offset = Math.min(0, offset);
+    if (offset !== 0) drag.row.dataset.side = offset > 0 ? 'right' : 'left';
+    drag.offset = offset;
+    drag.row.querySelector('.row-slide').style.transform = `translateX(${offset}px)`;
+  };
+  const endDrag = (cancelled) => {
+    const { row, base, offset } = drag;
+    drag = null;
+    const distance = Math.abs(offset);
+    const keepOpen = cancelled ? base !== 0 : base !== 0 ? distance > SWIPE_REVEAL_PX - SWIPE_OPEN_PX : distance >= SWIPE_OPEN_PX;
+    row.classList.remove('dragging');
+    row.querySelector('.row-slide').style.transform = '';
+    row.classList.toggle('open', keepOpen);
+    if (keepOpen) {
+      openRowId = row.dataset.id;
+      openSide = row.dataset.side;
+    } else {
+      openRowId = null;
+    }
+  };
+
+  container.addEventListener('pointerdown', (e) => {
+    moved = false;
+    longPressed = false;
+    const row = e.target.closest('.row.swipe');
+    if (!row || e.target.closest('.row-controls')) return;
+    pressed = { id: row.dataset.id, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+    listBusy = true;
+    const main = e.target.closest('[data-row]');
+    if (!main || openRowId) return;
     timer = setTimeout(() => {
       timer = null;
       longPressed = true;
+      const { id } = pressed;
+      pressed = null;
+      listBusy = false;
       longPressRow(id);
     }, LONG_PRESS_MS);
   });
-  container.addEventListener('pointermove', (e) => {
-    if (timer && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel();
+  window.addEventListener('pointermove', (e) => {
+    if (!pressed || e.pointerId !== pressed.pointerId) return;
+    const dx = e.clientX - pressed.x;
+    const dy = e.clientY - pressed.y;
+    if (Math.hypot(dx, dy) > TAP_SLOP_PX) {
+      moved = true;
+      cancelLongPress();
+    }
+    if (!drag && Math.abs(dx) >= SWIPE_LOCK_PX && Math.abs(dx) > Math.abs(dy) * 1.5) startDrag(e);
+    if (drag) moveDrag(dx);
   });
-  container.addEventListener('pointerup', cancel);
-  container.addEventListener('pointercancel', cancel);
+  const release = (e, cancelled) => {
+    if (!pressed || e.pointerId !== pressed.pointerId) return;
+    cancelLongPress();
+    if (drag) endDrag(cancelled);
+    pressed = null;
+    releaseList();
+  };
+  window.addEventListener('pointerup', (e) => release(e, false));
+  window.addEventListener('pointercancel', (e) => release(e, true));
   container.addEventListener('contextmenu', (e) => {
     if (e.target.closest('[data-row]')) e.preventDefault();
   });
   container.addEventListener('click', (e) => {
-    if (longPressed) {
+    if (longPressed || moved) {
       longPressed = false;
+      moved = false;
       return;
     }
+    const controls = e.target.closest('.row-controls');
+    if (controls) {
+      const id = controls.closest('.row').dataset.id;
+      const step = e.target.closest('[data-step]');
+      if (step) stepRow(id, Number(step.dataset.step));
+      else if (e.target.closest('[data-edit]')) openItemPanel(id);
+      return;
+    }
+    // With a row open, a tap anywhere on the list only closes it.
+    if (openRowId) return closeOpenRow();
     const row = e.target.closest('[data-row]');
     if (row) return tapRow(row.dataset.row);
     const star = e.target.closest('[data-star]');
@@ -882,16 +1097,20 @@ function startApp() {
   });
 }
 
+function unitOptions() {
+  return Object.entries(UNITS).map(([value, label]) => `<option value="${value}">${esc(label.many)}</option>`).join('');
+}
+
 function init() {
-  $('add-unit').innerHTML = Object.entries(UNITS).map(([value, label]) => `<option value="${value}">${esc(label.many)}</option>`).join('');
+  $('add-unit').innerHTML = unitOptions();
   bindEvents();
   $('setup').addEventListener('submit', submitSetup);
 
   if ('serviceWorker' in navigator) {
     const hadController = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      // A new version took over. Reload unless the user is in the middle of typing.
-      if (hadController && !$('add-name').value) location.reload();
+      // A new version took over. Reload unless the user is in the middle of typing or editing.
+      if (hadController && !$('add-name').value && $('modal').hidden) location.reload();
     });
     navigator.serviceWorker.register('sw.js').catch(() => { /* the app still works online without it */ });
   }

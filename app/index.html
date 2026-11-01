@@ -102,6 +102,16 @@
   #suggestions .suggest-name { flex: 1; min-width: 0; }
   .thumb { flex: none; width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: #fff; }
   #add-thumb { width: 64px; height: 64px; }
+  #panel-thumb { display: block; width: 160px; height: 160px; margin: 4px auto 12px; }
+
+  .panel-qty { display: flex; gap: 8px; margin-bottom: 12px; }
+  .panel-field { display: block; color: var(--muted); font-size: 14px; }
+  #panel-unit, #panel-category { min-height: 48px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 17px; }
+  #panel-unit { flex: 1; min-width: 92px; }
+  #panel-category { display: block; width: 100%; margin-top: 4px; }
+
+  #photo { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(0 0 0 / 0.85); }
+  #photo-img { max-width: 100%; max-height: 100%; width: min(100%, 640px); object-fit: contain; border-radius: 12px; background: #fff; }
 
   .strip { margin: 0 0 12px; }
   .strip h2, .group h2 { padding: 0 16px; font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
@@ -122,10 +132,33 @@
   .row-main:active { background: var(--accent-soft); }
   .row-main .name { display: block; overflow-wrap: anywhere; }
   .row-main .note { display: block; font-size: 13px; color: var(--muted); }
-  .row.unavailable { background: var(--grey-row); }
+  .row.unavailable, .row.unavailable .row-slide { background: var(--grey-row); }
   .row.unavailable .name { color: var(--muted); }
   .star.on { color: var(--star); }
   .row .icon-btn { height: auto; min-height: 48px; border-radius: 0; }
+
+  /* Swipe: the row slides aside and the controls wait underneath. --reveal matches SWIPE_REVEAL_PX in app.js. */
+  .row.swipe { --reveal: 236px; position: relative; overflow: hidden; }
+  .row-slide {
+    position: relative; z-index: 1; flex: 1; min-width: 0; display: flex; align-items: stretch;
+    background: var(--surface); transition: transform 0.18s ease;
+    touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .row.dragging .row-slide { transition: none; }
+  .row.open[data-side="right"] .row-slide { transform: translateX(var(--reveal)); }
+  .row.open[data-side="left"] .row-slide { transform: translateX(calc(var(--reveal) * -1)); }
+  .row-controls {
+    position: absolute; top: 0; bottom: 0; width: var(--reveal);
+    display: flex; align-items: center; background: var(--accent-soft);
+    visibility: hidden; transition: visibility 0s 0.18s;
+  }
+  .row[data-side="right"] .row-controls { left: 0; }
+  .row[data-side="left"] .row-controls { right: 0; }
+  .row.open .row-controls, .row.dragging .row-controls { visibility: visible; transition: none; }
+  .row-controls button { flex: none; width: 48px; height: 48px; font-size: 24px; color: var(--accent); }
+  .row-controls button:disabled { opacity: 0.35; }
+  .row-controls .row-edit { width: 60px; font-size: 16px; font-weight: 600; }
+  .row-qty { flex: 1; min-width: 0; text-align: center; font-size: 15px; line-height: 1.15; }
 
   .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
   .count { padding: 0 16px 12px; color: var(--muted); font-size: 14px; }
@@ -224,6 +257,7 @@
 
   <div id="toast" role="status" hidden><span id="toast-text"></span><button id="toast-undo" hidden>בטל</button></div>
   <div id="modal" hidden><div class="sheet" id="modal-sheet" role="dialog" aria-modal="true"></div></div>
+  <div id="photo" hidden><img id="photo-img" alt="" crossorigin="anonymous"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
   <script src="app.js"></script>
