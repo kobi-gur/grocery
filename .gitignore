@@ -1,2 +1,7 @@
 .env
 .DS_Store
+.env.*
+node_modules/
+.supabase/
+supabase/.temp/
+CLAUDE.local.md
