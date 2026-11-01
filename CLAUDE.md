@@ -43,6 +43,7 @@ docs/                 SPEC.md, SETUP.md, PROMPTS.md
 - The Gemini prompt is `supabase/functions/wa-webhook/prompt.md`. Change parsing behavior there, not in code.
 - Migrations are append-only. Never edit an applied migration; add a new one.
 - Every phase ends with the acceptance check in `docs/SPEC.md`. Do not start the next phase until it passes.
+- Commit directly to `main`. Do not create branches unless asked for one.
 
 ## When unsure
 - Product behavior question: the answer is in `docs/SPEC.md`. If it is not there, ask, do not guess.
