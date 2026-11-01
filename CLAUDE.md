@@ -37,7 +37,7 @@ docs/                 SPEC.md, SETUP.md, PROMPTS.md
 - `/wa-test "חלב, 2 ק\"ג עגבניות"` sends a fake inbound message to the local webhook
 
 ## Conventions
-- TypeScript for edge functions (Deno). Plain JS, no framework, no build step, for the PWA. Keep the app under 5 files.
+- TypeScript for edge functions (Deno). Plain JS, no framework, no build step, for the PWA. Keep the app at 5 files or fewer.
 - Supabase JS client v2 via CDN in the PWA. Realtime channel per household.
 - Units are the enum `unit, g, kg, ml, l, pack, bag, bottle`. Hebrew display names live in `app/app.js` only.
 - Catalog matching order: exact name, alias, `pg_trgm` similarity > 0.4, then Gemini. Never create a catalog item from a WhatsApp message before confirmation.

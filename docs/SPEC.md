@@ -34,7 +34,7 @@ Setup: open link in Safari, add to home screen, enter household code, save bot c
 
 A. WhatsApp: send text or photo. Bot replies one confirmation (items, qty, unit; "1 ?" when missing; "חדש" when unmatched) with buttons אשר / ערוך. Text reply = correction, new confirmation. Confirm adds all; duplicates merge qty. Records who added.
 
-B. App: type, autocomplete (household history by frequency, then chain catalog), set qty/unit, add. Unknown items create catalog entries. "בדרך כלל קונים" strip of frequent items not on the list. Autocomplete results and the item detail show a product thumbnail when one is available. Source order: chain image by barcode, then Open Food Facts by barcode, then a neutral placeholder. Images are never stored in the database or the repo; only a URL pattern is used. The in-store list stays text-only.
+B. App: type, autocomplete (household history by frequency, then chain catalog), set qty/unit, add. Unknown items create catalog entries. "בדרך כלל קונים" strip of frequent items not on the list. Autocomplete results and the item detail show a product thumbnail when one is available. Source order: chain image by barcode, then Open Food Facts by barcode, then a neutral placeholder. Images are never stored in the database or the repo; Shufersal images are built from the barcode; Open Food Facts needs one lookup per item. Nothing is stored in the database or repo. The in-store list stays text-only.
 
 C. In store: grouped by category in store-walk order. Tap = bought, gone, undo toast. Long-press = unavailable. Realtime between phones, offline queue. "סיימתי": wa.me message to wifey with unavailable items, trip saved, list cleared. Next list shows "חסר בפעם הקודמת" strip.
 
@@ -90,4 +90,4 @@ What was built differs from the sections above in these ways. The code is the so
 - App size: `app/` holds 5 files (the icon is the fifth), one over the "under 5 files" convention in CLAUDE.md.
 
 ## Risks
-Test number reclaimed → prepaid SIM, one config change. Gemini free tier changes → swap model behind prompt.md, or trigram-only fallback. Supabase pause → keep-alive; app shows "המסד ישן, לחץ להעיר". Push lost after reinstall → re-ask on open; Thursday prompt also as in-app banner.
+Test number reclaimed → prepaid SIM, one config change. Gemini free tier changes → swap model behind prompt.md, or trigram-only fallback. Supabase pause → keep-alive; app shows "המסד ישן, לחץ להעיר". Push lost after reinstall → re-ask on open; Thursday prompt also as in-app banner. Shufersal image URL formula is reverse-engineered and may stop working → app falls back to Open Food Facts, then placeholder. No other impact.
