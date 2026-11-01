@@ -29,6 +29,7 @@ docs/                 SPEC.md, SETUP.md, PROMPTS.md
 ```
 
 ## Commands
+- The Supabase CLI authenticates via `SUPABASE_ACCESS_TOKEN` from `.env`. Export it in the same shell command as any `supabase` call, and never print it.
 - `supabase db push` applies migrations to the linked project (use `/db-migrate`)
 - `supabase functions deploy wa-webhook` deploys the webhook (use `/deploy`)
 - `supabase functions serve wa-webhook --env-file .env` runs it locally
